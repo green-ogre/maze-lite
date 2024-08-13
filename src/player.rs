@@ -1,4 +1,4 @@
-use avian2d::prelude::*;
+use avian2d::schedule::PostProcessCollisions;
 use bevy::prelude::*;
 use leafwing_input_manager::prelude::*;
 
@@ -14,45 +14,41 @@ impl Plugin for PlayerPlugin {
             movement::CharacterControllerPlugin,
         ))
         .add_systems(Startup, spawn_player)
-        .add_systems(Update, input::handle_actions);
+        .add_systems(Update, (input::handle_actions,))
+        .add_systems(PostProcessCollisions, follow_player);
     }
 }
 
 #[derive(Component)]
 struct Player;
 
-fn spawn_player(
-    mut commands: Commands,
-    server: Res<AssetServer>,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-) {
+fn spawn_player(mut commands: Commands, server: Res<AssetServer>) {
     let texture = server.load("textures/smile.png");
 
     commands.spawn((
         Player,
         movement::CharacterControllerBundle::new(),
         SpriteBundle {
-            transform: Transform::from_scale(Vec3::splat(3.)),
+            transform: Transform::from_translation(Vec3::new(
+                -6.5 * 16. * 3. - 1.,
+                -6.5 * 16. * 3. - 1.,
+                100.,
+            )),
             texture,
             ..Default::default()
         },
         InputManagerBundle::with_map(input::PlayerAction::default_input_map()),
     ));
+}
 
-    let mut make_rect = move |pos: Vec2, size: Vec2| {
-        commands.spawn((
-            RigidBody::Static,
-            Collider::rectangle(size.x, size.y),
-            PbrBundle {
-                mesh: meshes.add(Cuboid::default()),
-                material: materials.add(Color::srgb(0.8, 0.7, 0.6)),
-                transform: Transform::from_xyz(pos.x, pos.y, 0.),
-                ..default()
-            },
-        ));
+fn follow_player(
+    mut camera: Query<&mut Transform, With<Camera2d>>,
+    player: Query<&Transform, (With<Player>, Without<Camera2d>)>,
+) {
+    let (Some(mut camera), Some(player)) = (camera.iter_mut().next(), player.iter().next()) else {
+        return;
     };
 
-    make_rect(Vec2::new(100., 100.), Vec2::new(100., 100.));
-    make_rect(Vec2::new(200., 100.), Vec2::new(100., 100.));
+    camera.translation = player.translation;
+    camera.scale = Vec3::new(0.15, 0.15, 1.);
 }

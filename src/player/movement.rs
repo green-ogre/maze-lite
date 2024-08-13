@@ -8,8 +8,8 @@ pub struct CharacterControllerPlugin;
 
 impl Plugin for CharacterControllerPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, movement)
-            .add_plugins(PhysicsDebugPlugin::default());
+        app.add_systems(Update, movement);
+        // .add_plugins(PhysicsDebugPlugin::default());
     }
 }
 
@@ -31,14 +31,14 @@ pub struct CharacterControllerBundle {
 
 impl CharacterControllerBundle {
     pub fn new() -> Self {
-        let collider = Collider::circle(10.);
+        let collider = Collider::circle(3.);
         let mut caster_shape = collider.clone();
-        caster_shape.set_scale(Vector::ONE * 0.99, 5);
+        caster_shape.set_scale(Vector::ONE * 0.95, 5);
 
         Self {
             character_controller: CharacterController,
             rigid_body: RigidBody::Dynamic,
-            collider: Collider::circle(10.),
+            collider,
             ground_caster: ShapeCaster::new(caster_shape, Vector::ZERO, 0., Dir2::NEG_Y)
                 .with_max_time_of_impact(0.2),
             locked_axes: LockedAxes::ROTATION_LOCKED,
@@ -58,7 +58,7 @@ fn movement(
 
     let pair = action.clamped_axis_pair(&PlayerAction::Move);
     let cleaned = if pair.length_squared() > 0.2 {
-        pair.normalize_or_zero() * 500.
+        pair.normalize_or_zero() * 100.
     } else {
         Vec2::default()
     };
