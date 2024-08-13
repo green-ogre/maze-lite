@@ -1,4 +1,7 @@
-use bevy::prelude::*;
+use bevy::{
+    input::{keyboard::KeyboardInput, ButtonState},
+    prelude::*,
+};
 use bevy_ecs_tilemap::prelude::*;
 use rand::Rng;
 
@@ -6,19 +9,38 @@ pub struct MazePlugin;
 
 impl Plugin for MazePlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, startup).add_plugins(TilemapPlugin);
+        app.add_plugins(TilemapPlugin)
+            .add_systems(Startup, spawn_tileset)
+            .add_systems(
+                Update,
+                (despawn_tileset, spawn_tileset).run_if(should_restart),
+            );
     }
 }
-fn startup(mut commands: Commands, asset_server: Res<AssetServer>) {
+
+fn should_restart(mut reader: EventReader<KeyboardInput>) -> bool {
+    for e in reader.read() {
+        if matches!(
+            e,
+            KeyboardInput {
+                key_code,
+                state,
+                ..
+            }
+            if *key_code == KeyCode::KeyR &&
+                *state == ButtonState::Pressed
+        ) {
+            return true;
+        }
+    }
+
+    false
+}
+
+fn spawn_tileset(mut commands: Commands, asset_server: Res<AssetServer>) {
     let texture_handle: Handle<Image> = asset_server.load("tileset.png");
 
     let map_size = TilemapSize { x: 16, y: 16 };
-
-    // Create a tilemap entity a little early.
-    // We want this entity early because we need to tell each tile which tilemap entity
-    // it is associated with. This is done with the TilemapId component on each tile.
-    // Eventually, we will insert the `TilemapBundle` bundle on the entity, which
-    // will contain various necessary components, such as `TileStorage`.
     let tilemap_entity = commands.spawn_empty().id();
 
     // To begin creating the map we will need a `TileStorage` component.
@@ -336,6 +358,10 @@ fn startup(mut commands: Commands, asset_server: Res<AssetServer>) {
         visibility: Visibility::Visible,
         ..Default::default()
     });
+}
+
+fn despawn_tileset(mut commands: Commands, tilemap: Query<Entity, With<TileStorage>>) {
+    commands.entity(tilemap.single()).despawn();
 }
 
 // fn startup(mut commands: Commands, asset_server: Res<AssetServer>) {
