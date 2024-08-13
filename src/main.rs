@@ -1,4 +1,4 @@
-use bevy::{log::LogPlugin, prelude::*};
+use bevy::{log::LogPlugin, prelude::*, window::WindowResolution};
 use maze::MazePlugin;
 
 pub mod maze;
@@ -10,6 +10,7 @@ fn main() {
                 title: String::from(
                     "Basic Example - Press Space to change Texture and H to show/hide tilemap.",
                 ),
+                resolution: WindowResolution::new(1200.0, 1200.0),
                 ..Default::default()
             }),
             ..default()
