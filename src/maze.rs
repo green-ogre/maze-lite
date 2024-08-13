@@ -1,9 +1,13 @@
+use avian2d::{collision::Collider, dynamics::rigid_body::RigidBody};
+use bevy::prelude::*;
 use bevy::{
     input::{keyboard::KeyboardInput, ButtonState},
     prelude::*,
 };
 use bevy_ecs_tilemap::prelude::*;
 use rand::Rng;
+
+use crate::player::Player;
 
 pub struct MazePlugin;
 
@@ -13,7 +17,7 @@ impl Plugin for MazePlugin {
             .add_systems(Startup, spawn_tileset)
             .add_systems(
                 Update,
-                (despawn_tileset, spawn_tileset).run_if(should_restart),
+                (despawn_tileset, spawn_tileset, reset_player).run_if(should_restart),
             );
     }
 }
@@ -37,6 +41,30 @@ fn should_restart(mut reader: EventReader<KeyboardInput>) -> bool {
     false
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TileType {
+    Wall,
+    Floor,
+}
+
+impl TileType {
+    fn into_index(self) -> TileTextureIndex {
+        match self {
+            Self::Wall => TileTextureIndex(17),
+            Self::Floor => TileTextureIndex(92),
+        }
+    }
+}
+
+fn reset_player(mut query: Query<&mut Transform, With<Player>>) {
+    let Ok(mut transform) = query.get_single_mut() else {
+        return;
+    };
+
+    *transform =
+        Transform::from_translation(Vec3::new(-6.5 * 16. * 3. - 1., -6.5 * 16. * 3. - 1., 100.));
+}
+
 fn spawn_tileset(mut commands: Commands, asset_server: Res<AssetServer>) {
     let texture_handle: Handle<Image> = asset_server.load("tileset.png");
 
@@ -48,8 +76,8 @@ fn spawn_tileset(mut commands: Commands, asset_server: Res<AssetServer>) {
     // tiles in the world. If you have multiple layers of tiles you would have a tilemap entity
     // per layer, each with their own `TileStorage` component.
 
-    let wall_tile = TileTextureIndex(17);
-    let floor_tile = TileTextureIndex(92);
+    // let wall_tile = TileTextureIndex(17);
+    // let floor_tile = TileTextureIndex(92);
     let mut floor_tiles: Vec<usize> = Vec::new();
 
     let end = map_size.count() - map_size.x as usize - 2;
@@ -254,7 +282,7 @@ fn spawn_tileset(mut commands: Commands, asset_server: Res<AssetServer>) {
     }
 
     let expanded_map_size = TilemapSize { x: 48, y: 48 };
-    let mut expanded_maze = vec![wall_tile; expanded_map_size.count()];
+    let mut expanded_maze = vec![TileType::Wall; expanded_map_size.count()];
 
     let mut draw_path = |tiles: Vec<usize>| {
         let mut previous = tiles[0];
@@ -278,20 +306,22 @@ fn spawn_tileset(mut commands: Commands, asset_server: Res<AssetServer>) {
             let diff = previous as i32 - tile as i32;
             if diff == -1 {
                 // Left
-                expanded_maze[middle_of_previous + 1] = floor_tile;
-                expanded_maze[middle_of_previous + 2] = floor_tile;
+                expanded_maze[middle_of_previous + 1] = TileType::Floor;
+                expanded_maze[middle_of_previous + 2] = TileType::Floor;
             } else if diff == 1 {
                 // Right
-                expanded_maze[middle_of_previous - 1] = floor_tile;
-                expanded_maze[middle_of_previous - 2] = floor_tile;
+                expanded_maze[middle_of_previous - 1] = TileType::Floor;
+                expanded_maze[middle_of_previous - 2] = TileType::Floor;
             } else if diff == neg_width {
                 // Up
-                expanded_maze[middle_of_previous + expanded_map_size.x as usize] = floor_tile;
-                expanded_maze[middle_of_previous + (expanded_map_size.x as usize * 2)] = floor_tile;
+                expanded_maze[middle_of_previous + expanded_map_size.x as usize] = TileType::Floor;
+                expanded_maze[middle_of_previous + (expanded_map_size.x as usize * 2)] =
+                    TileType::Floor;
             } else if diff == width {
                 // Down
-                expanded_maze[middle_of_previous - expanded_map_size.x as usize] = floor_tile;
-                expanded_maze[middle_of_previous - (expanded_map_size.x as usize * 2)] = floor_tile;
+                expanded_maze[middle_of_previous - expanded_map_size.x as usize] = TileType::Floor;
+                expanded_maze[middle_of_previous - (expanded_map_size.x as usize * 2)] =
+                    TileType::Floor;
             } else if diff == 0 {
                 info!("start equals tile");
             } else {
@@ -300,7 +330,8 @@ fn spawn_tileset(mut commands: Commands, asset_server: Res<AssetServer>) {
 
             let row = tile / map_size.x as usize;
             let col = tile % map_size.x as usize;
-            expanded_maze[(row * 3 + 1) * expanded_map_size.x as usize + col * 3 + 1] = floor_tile;
+            expanded_maze[(row * 3 + 1) * expanded_map_size.x as usize + col * 3 + 1] =
+                TileType::Floor;
 
             previous = tile;
         }
@@ -314,6 +345,7 @@ fn spawn_tileset(mut commands: Commands, asset_server: Res<AssetServer>) {
     // for index in floor_tiles.into_iter() {
     //     maze[index as usize] = floor_tile;
     // }
+    let tile_size = TilemapTileSize { x: 16.0, y: 16.0 };
 
     // Spawn the elements of the tilemap.
     // Alternatively, you can use helpers::filling::fill_tilemap.
@@ -324,8 +356,8 @@ fn spawn_tileset(mut commands: Commands, asset_server: Res<AssetServer>) {
             y: i as u32 / expanded_map_size.x as u32,
         };
         let tile = TileBundle {
-            position: tile_pos,
             visible: TileVisible(true),
+            position: tile_pos,
             tilemap_id: TilemapId(tilemap_entity),
             texture_index: {
                 // if i == start {
@@ -333,17 +365,32 @@ fn spawn_tileset(mut commands: Commands, asset_server: Res<AssetServer>) {
                 // } else if i == end {
                 //     TileTextureIndex(146)
                 // } else {
-                expanded_maze[i]
+                expanded_maze[i].into_index()
                 // }
             },
             ..Default::default()
         };
-        // info!("{tile:#?}");
-        let tile_entity = commands.spawn(tile).id();
-        tile_storage.set(&tile_pos, tile_entity);
+
+        let tile_entity = commands.spawn(tile);
+        tile_storage.set(&tile_pos, tile_entity.id());
+
+        if expanded_maze[i] == TileType::Wall {
+            commands.spawn((
+                TileMapWall,
+                RigidBody::Static,
+                Collider::rectangle(tile_size.x, tile_size.y),
+                TransformBundle::from_transform(Transform {
+                    translation: Vec3::new(
+                        (tile_pos.x as f32 - (expanded_map_size.x as f32 - 1.) * 0.5) * tile_size.x,
+                        (tile_pos.y as f32 - (expanded_map_size.y as f32 - 1.) * 0.5) * tile_size.y,
+                        0.,
+                    ),
+                    ..Default::default()
+                }),
+            ));
+        }
     }
 
-    let tile_size = TilemapTileSize { x: 16.0, y: 16.0 };
     let grid_size = tile_size.into();
     let map_type = TilemapType::default();
 
@@ -360,8 +407,18 @@ fn spawn_tileset(mut commands: Commands, asset_server: Res<AssetServer>) {
     });
 }
 
-fn despawn_tileset(mut commands: Commands, tilemap: Query<Entity, With<TileStorage>>) {
+#[derive(Component)]
+struct TileMapWall;
+
+fn despawn_tileset(
+    mut commands: Commands,
+    tilemap: Query<Entity, With<TileStorage>>,
+    tiles: Query<Entity, With<TileMapWall>>,
+) {
     commands.entity(tilemap.single()).despawn();
+    for entity in tiles.iter() {
+        commands.entity(entity).despawn();
+    }
 }
 
 // fn startup(mut commands: Commands, asset_server: Res<AssetServer>) {
